@@ -48,10 +48,15 @@ export async function createBooking(booking: Omit<Booking, 'id' | 'created_at' |
     }
 
     if (supabase) {
-        // Let Supabase generate the ID
-        const { data, error } = await supabase.from('bookings').insert(baseBooking).select().single()
+        // Just insert, don't select (since guests can't read the DB, selecting would fail)
+        const { error } = await supabase.from('bookings').insert(baseBooking)
         if (error) throw error
-        return data as Booking
+
+        // Return optimistic object (ID is not needed for the success screen)
+        return {
+            ...baseBooking,
+            id: 'temp-id-placeholder'
+        } as Booking
     }
 
     // Mock Mode
