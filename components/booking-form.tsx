@@ -70,15 +70,32 @@ export function BookingForm() {
         setLoading(true)
         try {
             const price = getPrice(formData.serviceScope, formData.isMonthly)
-            await createBooking({
-                customer_name: formData.name,
-                customer_address: `${formData.street} ${formData.houseNumber}`,
-                service_date: formData.date,
-                bin_type: formData.binType,
-                service_scope: formData.serviceScope,
-                price: price,
-                is_monthly: formData.isMonthly
-            })
+
+            // Determine dates to book
+            let datesToBook = [formData.date]
+            if (formData.isMonthly) {
+                // Get next 12 dates to ensure we cover a good period (approx 6-12 months)
+                const upcoming = getNextDates(formData.street, formData.binType, 12)
+                // Filter to only include dates AFTER the selected start date (avoiding duplicates if selected is in list)
+                // Actually, if user selects Date X, we want Date X + future.
+                // upcoming contains Date X if it's upcoming.
+                // Let's just merge and deduplicate
+                const allDates = new Set([formData.date, ...upcoming.filter(d => d >= formData.date)])
+                datesToBook = Array.from(allDates).sort()
+            }
+
+            // Create bookings in parallel
+            await Promise.all(datesToBook.map(date =>
+                createBooking({
+                    customer_name: formData.name,
+                    customer_address: `${formData.street} ${formData.houseNumber}`,
+                    service_date: date,
+                    bin_type: formData.binType,
+                    service_scope: formData.serviceScope,
+                    price: price,
+                    is_monthly: formData.isMonthly
+                })
+            ))
 
             // Send Notification (Fire and forget)
             fetch('/api/notify', {

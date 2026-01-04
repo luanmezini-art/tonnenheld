@@ -331,13 +331,9 @@ export default function AdminDashboard() {
                                                                             {isCurrent && (
                                                                                 <Button size="sm" variant={isFree ? "default" : "secondary"} className={cn("h-6 text-[10px] mt-2 w-full", isFree && "bg-purple-600 hover:bg-purple-700")}
                                                                                     onClick={async () => {
-                                                                                        const nextDateObj = displayDates[1] || addWeeks(new Date(), 4)
-
-                                                                                        if (!confirm(`Auftrag erledigen?`)) return
+                                                                                        // Just mark as done. The grouping logic will automatically show the next open booking.
                                                                                         try {
                                                                                             await updateBookingStatus(booking.id, 'Erledigt')
-                                                                                            const { id, created_at, status, paid, ...rest } = booking
-                                                                                            await createBooking({ ...rest, service_date: nextDateObj.toISOString(), paid: false })
                                                                                             await checkAuthAndLoad()
                                                                                         } catch (e) { alert("Fehler: " + e) }
                                                                                     }}
