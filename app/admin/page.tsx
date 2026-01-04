@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { format, addWeeks } from "date-fns"
 import { de } from "date-fns/locale"
 import { getBookings, updateBookingStatus, updateBookingPaid, type Booking, deleteBooking, createBooking } from "@/lib/storage"
+import { getNextDates } from "@/lib/schedules"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Check, LogOut, Trash2, Coins, Euro, Star, Gift } from "lucide-react"
@@ -255,7 +256,44 @@ export default function AdminDashboard() {
                                                     b.customer_address.toLowerCase().trim() === normAddr &&
                                                     b.bin_type === booking.bin_type
                                                 ).length
-                                                const nextDates = Array.from({ length: 6 }, (_, i) => addWeeks(new Date(booking.service_date), i * 4))
+
+                                                // EXTRACT STREET
+                                                // Assuming simple format "Streetname 12" -> take first part
+                                                // For "Hobergerfeld 1" -> "Hobergerfeld"
+                                                const street = booking.customer_address.split(/\d/)[0].trim()
+
+                                                // GET REAL NEXT DATES
+                                                // We need to fetch enough dates to show the next 6 steps. 
+                                                // Since we don't know exactly where we are in the flow (maybe extracted list starts today, maybe next week),
+                                                // we fetch 10 and try to map them.
+                                                // Note: getNextDates returns dates >= today.
+                                                // The current booking is likely one of them.
+                                                const realSchedule = getNextDates(street, booking.bin_type, 10)
+
+                                                // Determine the displayed set:
+                                                // The first one should be the CURRENT booking (or close to it).
+                                                // If realSchedule[0] is roughly same as booking.service_date, use it.
+                                                // Otherwise force current booking date as start.
+                                                let displayDates = realSchedule.slice(0, 6)
+
+                                                // Fallback if realSchedule is empty (e.g. street not found) -> Use old +4 weeks logic
+                                                if (displayDates.length === 0) {
+                                                    displayDates = Array.from({ length: 6 }, (_, i) => addWeeks(new Date(booking.service_date), i * 4))
+                                                } else {
+                                                    // Ensure the first date displayed matches the current booking date to avoid confusion,
+                                                    // unless the current booking date is in the past compared to the schedule?
+                                                    // Actually, let's trust the schedule but make sure we don't skip the current one if it's not "done" yet.
+                                                    const currentServiceDate = new Date(booking.service_date).setHours(0, 0, 0, 0)
+                                                    const firstScheduleDate = displayDates[0].setHours(0, 0, 0, 0)
+
+                                                    // If the schedule engine says the next date is LATER than our current booking, 
+                                                    // it means our current booking is "due" and the schedule shows the one AFTER.
+                                                    // BUT we want to show the current one as Step 1.
+                                                    if (firstScheduleDate > currentServiceDate) {
+                                                        // Prepend current booking date
+                                                        displayDates = [new Date(booking.service_date), ...displayDates].slice(0, 6)
+                                                    }
+                                                }
 
                                                 return (
                                                     <div key={booking.id} className="border rounded-lg p-4 bg-background shadow-sm space-y-4">
@@ -271,9 +309,9 @@ export default function AdminDashboard() {
                                                             </div>
                                                         </div>
                                                         <div className="bg-muted/30 rounded-md p-3">
-                                                            <div className="text-xs font-semibold uppercase text-muted-foreground mb-2">Vorschau & Stempelkarte</div>
+                                                            <div className="text-xs font-semibold uppercase text-muted-foreground mb-2">Vorschau & Stempelkarte (Echter Kalender)</div>
                                                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-                                                                {nextDates.map((date, index) => {
+                                                                {displayDates.map((date, index) => {
                                                                     const cycleNum = ((relevantHistory + index) % 6) + 1
                                                                     const isFree = cycleNum === 6
                                                                     const isCurrent = index === 0
@@ -288,12 +326,15 @@ export default function AdminDashboard() {
                                                                             {isCurrent && (
                                                                                 <Button size="sm" variant={isFree ? "default" : "secondary"} className={cn("h-6 text-[10px] mt-2 w-full", isFree && "bg-purple-600 hover:bg-purple-700")}
                                                                                     onClick={async () => {
-                                                                                        if (!confirm(`Auftrag vom ${format(date, 'dd.MM.')} erledigen und nächsten Monat anlegen?`)) return
+                                                                                        // NEXT DATE LOGIC:
+                                                                                        // We want the 2nd item from our display list (index 1)
+                                                                                        const nextDateObj = displayDates[1] || addWeeks(new Date(), 4) // fallback
+
+                                                                                        if (!confirm(`Auftrag vom ${format(date, 'dd.MM.')} erledigen und nächsten Termin am ${format(nextDateObj, 'dd.MM.')} anlegen?`)) return
                                                                                         try {
                                                                                             await updateBookingStatus(booking.id, 'Erledigt')
-                                                                                            const nextDate = addWeeks(new Date(booking.service_date), 4)
                                                                                             const { id, created_at, status, paid, ...rest } = booking
-                                                                                            await createBooking({ ...rest, service_date: nextDate.toISOString(), paid: false })
+                                                                                            await createBooking({ ...rest, service_date: nextDateObj.toISOString(), paid: false })
                                                                                             await checkAuthAndLoad()
                                                                                         } catch (e) { alert("Fehler: " + e) }
                                                                                     }}
