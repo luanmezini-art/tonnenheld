@@ -38,22 +38,34 @@ export async function getBookings(): Promise<Booking[]> {
 }
 
 export async function createBooking(booking: Omit<Booking, 'id' | 'created_at' | 'status'>): Promise<Booking> {
-    const newBooking: Booking = {
+    // 1. Prepare base data (without ID)
+    const baseBooking = {
         ...booking,
-        id: crypto.randomUUID(),
         created_at: new Date().toISOString(),
-        status: 'Offen',
+        status: 'Offen' as BookingStatus,
         paid: false,
         is_monthly: booking.is_monthly || false
     }
 
     if (supabase) {
-        const { data, error } = await supabase.from('bookings').insert(newBooking).select().single()
+        // Let Supabase generate the ID
+        const { data, error } = await supabase.from('bookings').insert(baseBooking).select().single()
         if (error) throw error
-        return data
+        return data as Booking
     }
 
     // Mock Mode
+    // Generate a simple compatible UUID-like string for mock mode (safe for all browsers)
+    const mockId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+
+    const newBooking: Booking = {
+        ...baseBooking,
+        id: mockId
+    }
+
     if (typeof window !== 'undefined') {
         const current = await getBookings()
         const updated = [...current, newBooking]

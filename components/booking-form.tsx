@@ -82,7 +82,8 @@ export function BookingForm() {
             setSuccess(true)
         } catch (error) {
             console.error("Booking failed:", error)
-            alert("Fehler bei der Buchung. Bitte versuche es erneut.")
+            const errorMessage = error instanceof Error ? error.message : JSON.stringify(error)
+            alert(`Fehler bei der Buchung: ${errorMessage}`)
         } finally {
             setLoading(false)
         }

@@ -22,7 +22,7 @@ export default function RootLayout({
           {children}
         </main>
         <footer className="py-6 text-center text-sm text-muted-foreground border-t bg-muted/30">
-          <p>© <a href="/login" className="hover:text-primary transition-colors">{new Date().getFullYear()}</a> Tonnenheld.</p>
+          <p>© <a href="/login" className="hover:text-primary transition-colors">{new Date().getFullYear()}</a> Tonnenheld. <span className="text-xs opacity-50">v1.1</span></p>
         </footer>
       </body>
     </html>
