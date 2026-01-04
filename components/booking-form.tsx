@@ -196,7 +196,7 @@ export function BookingForm() {
                             <label htmlFor="houseNumber" className="text-sm font-medium">Nr.</label>
                             <Input
                                 id="houseNumber"
-                                placeholder="12"
+                                placeholder=""
                                 value={formData.houseNumber}
                                 onChange={(e) => setFormData({ ...formData, houseNumber: e.target.value })}
                                 required

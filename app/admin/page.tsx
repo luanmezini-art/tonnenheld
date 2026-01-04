@@ -275,13 +275,17 @@ export default function AdminDashboard() {
                                                         <div className="flex items-center gap-2">
                                                             <Button
                                                                 onClick={() => handleTogglePaid(booking.id, booking.paid)}
-                                                                variant="outline"
+                                                                variant={booking.paid ? "outline" : "destructive"}
                                                                 size="sm"
-                                                                className={cn("border-dashed", booking.paid ? "border-green-500 text-green-600 bg-green-50" : "text-muted-foreground")}
+                                                                className={cn("transition-all",
+                                                                    booking.paid
+                                                                        ? "border-green-500 text-green-600 bg-green-50 border-dashed"
+                                                                        : "bg-red-500 hover:bg-red-600 text-white shadow-sm"
+                                                                )}
                                                                 title="Zahlungsstatus ändern"
                                                             >
                                                                 <Coins className="w-4 h-4 mr-1" />
-                                                                {booking.paid ? "Bezahlt" : "Markieren"}
+                                                                {booking.paid ? "Bezahlt" : "Nicht bezahlt"}
                                                             </Button>
 
                                                             {booking.status === 'Offen' && (
