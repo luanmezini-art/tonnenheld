@@ -245,12 +245,31 @@ export default function AdminDashboard() {
                                     <div className="text-center py-8 text-muted-foreground">Keine Einträge gefunden.</div>
                                 ) : (
                                     <div className="space-y-4">
-                                        {displayedBookings.map((booking) => {
-                                            const isGratis = freeBookingIds.has(booking.id)
+                                        {filter === 'abos' ? (() => {
+                                            // 1. Group by unique subscription (Name + Address + Type)
+                                            const groups = new Map<string, Booking[]>()
+                                            displayedBookings.forEach(b => {
+                                                // Aggressive normalization: Strip all spaces, lowercase
+                                                const normName = b.customer_name.toLowerCase().replace(/\s+/g, '')
+                                                const normAddr = b.customer_address.toLowerCase().replace(/\s+/g, '')
+                                                const normType = b.bin_type.toLowerCase()
+                                                const key = `${normName}|${normAddr}|${normType}`
 
-                                            if (filter === 'abos') {
+                                                if (!groups.has(key)) groups.set(key, [])
+                                                groups.get(key)!.push(b)
+                                            })
+
+                                            return Array.from(groups.entries()).map(([groupKey, group]) => {
+                                                // Pick the best representative
+                                                group.sort((a, b) => new Date(a.service_date).getTime() - new Date(b.service_date).getTime())
+
+                                                const activeBooking = group.find(b => b.status === 'Offen')
+                                                const latestBooking = group[group.length - 1]
+                                                const booking = activeBooking || latestBooking
+
                                                 const normName = booking.customer_name.toLowerCase().trim()
                                                 const normAddr = booking.customer_address.toLowerCase().trim()
+
                                                 const relevantHistory = completedBookings.filter(b =>
                                                     b.customer_name.toLowerCase().trim() === normName &&
                                                     b.customer_address.toLowerCase().trim() === normAddr &&
@@ -258,52 +277,38 @@ export default function AdminDashboard() {
                                                 ).length
 
                                                 // EXTRACT STREET
-                                                // Assuming simple format "Streetname 12" -> take first part
-                                                // For "Hobergerfeld 1" -> "Hobergerfeld"
                                                 const street = booking.customer_address.split(/\d/)[0].trim()
-
-                                                // GET REAL NEXT DATES
-                                                // We need to fetch enough dates to show the next 6 steps. 
-                                                // Since we don't know exactly where we are in the flow (maybe extracted list starts today, maybe next week),
-                                                // we fetch 10 and try to map them.
-                                                // Note: getNextDates returns dates >= today.
-                                                // The current booking is likely one of them.
                                                 const realSchedule = getNextDates(street, booking.bin_type, 10)
 
-                                                // Determine the displayed set:
-                                                // The first one should be the CURRENT booking (or close to it).
-                                                // If realSchedule[0] is roughly same as booking.service_date, use it.
-                                                // Otherwise force current booking date as start.
                                                 let displayDates = realSchedule.slice(0, 6)
-
-                                                // Fallback if realSchedule is empty (e.g. street not found) -> Use old +4 weeks logic
                                                 if (displayDates.length === 0) {
                                                     displayDates = Array.from({ length: 6 }, (_, i) => addWeeks(new Date(booking.service_date), i * 4))
                                                 } else {
-                                                    // Ensure the first date displayed matches the current booking date to avoid confusion,
-                                                    // unless the current booking date is in the past compared to the schedule?
-                                                    // Actually, let's trust the schedule but make sure we don't skip the current one if it's not "done" yet.
                                                     const currentServiceDate = new Date(booking.service_date).setHours(0, 0, 0, 0)
                                                     const firstScheduleDate = displayDates[0].setHours(0, 0, 0, 0)
 
-                                                    // If the schedule engine says the next date is LATER than our current booking, 
-                                                    // it means our current booking is "due" and the schedule shows the one AFTER.
-                                                    // BUT we want to show the current one as Step 1.
                                                     if (firstScheduleDate > currentServiceDate) {
-                                                        // Prepend current booking date
                                                         displayDates = [new Date(booking.service_date), ...displayDates].slice(0, 6)
+                                                    }
+                                                    if (booking.status === 'Offen') {
+                                                        displayDates[0] = new Date(booking.service_date)
                                                     }
                                                 }
 
                                                 return (
-                                                    <div key={booking.id} className="border rounded-lg p-4 bg-background shadow-sm space-y-4">
+                                                    <div key={groupKey} className="border rounded-lg p-4 bg-background shadow-sm space-y-4">
                                                         <div className="flex justify-between items-start">
                                                             <div>
                                                                 <div className="font-bold text-lg">{booking.customer_name}</div>
                                                                 <div className="text-sm text-muted-foreground">{booking.customer_address}</div>
                                                             </div>
                                                             <div className="flex gap-2">
-                                                                <span className={cn("text-xs px-2 py-1 rounded-full border font-medium bg-blue-50 border-blue-200 text-blue-700")}>
+                                                                <span className={cn("text-xs px-2 py-1 rounded-full border font-medium",
+                                                                    booking.bin_type === 'Restmüll' && "bg-gray-100 border-gray-400",
+                                                                    booking.bin_type === 'Papier' && "bg-blue-50 border-blue-200 text-blue-700",
+                                                                    booking.bin_type === 'Bio' && "bg-amber-50 border-amber-200 text-amber-700",
+                                                                    booking.bin_type === 'Gelber Sack' && "bg-yellow-50 border-yellow-200 text-yellow-700",
+                                                                )}>
                                                                     {booking.bin_type} Abo
                                                                 </span>
                                                             </div>
@@ -321,16 +326,14 @@ export default function AdminDashboard() {
                                                                             isFree && !isCurrent && "bg-purple-50 border-purple-200 text-purple-700"
                                                                         )}>
                                                                             {isFree && <div className="absolute -top-2 bg-purple-600 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">GRATIS</div>}
-                                                                            <div className="font-medium">{format(date, 'dd.MM.')}</div>
+                                                                            <div className="font-medium">{format(new Date(date), 'dd.MM.')}</div>
                                                                             <div className="text-[10px] mt-1 text-muted-foreground">#{cycleNum}</div>
                                                                             {isCurrent && (
                                                                                 <Button size="sm" variant={isFree ? "default" : "secondary"} className={cn("h-6 text-[10px] mt-2 w-full", isFree && "bg-purple-600 hover:bg-purple-700")}
                                                                                     onClick={async () => {
-                                                                                        // NEXT DATE LOGIC:
-                                                                                        // We want the 2nd item from our display list (index 1)
-                                                                                        const nextDateObj = displayDates[1] || addWeeks(new Date(), 4) // fallback
+                                                                                        const nextDateObj = displayDates[1] || addWeeks(new Date(), 4)
 
-                                                                                        if (!confirm(`Auftrag vom ${format(date, 'dd.MM.')} erledigen und nächsten Termin am ${format(nextDateObj, 'dd.MM.')} anlegen?`)) return
+                                                                                        if (!confirm(`Auftrag erledigen?`)) return
                                                                                         try {
                                                                                             await updateBookingStatus(booking.id, 'Erledigt')
                                                                                             const { id, created_at, status, paid, ...rest } = booking
@@ -338,7 +341,7 @@ export default function AdminDashboard() {
                                                                                             await checkAuthAndLoad()
                                                                                         } catch (e) { alert("Fehler: " + e) }
                                                                                     }}
-                                                                                >{isFree ? "Gratis erledigen" : "Erledigen ✓"}</Button>
+                                                                                >{isFree ? "Gratis!" : <Check className="w-4 h-4" />}</Button>
                                                                             )}
                                                                         </div>
                                                                     )
@@ -347,85 +350,87 @@ export default function AdminDashboard() {
                                                         </div>
                                                     </div>
                                                 )
-                                            }
-
-                                            return (
-                                                <div key={booking.id} className={cn("flex flex-col md:flex-row items-start md:items-center justify-between p-4 border rounded-lg shadow-sm gap-4 transition-colors", booking.status === 'Erledigt' ? 'bg-muted/40' : 'bg-background')}>
-                                                    <div className="space-y-1">
-                                                        <div className="font-semibold flex items-center gap-2">
-                                                            {booking.customer_name}
-                                                            <span className={cn("text-xs px-2 py-0.5 rounded-full border",
-                                                                booking.bin_type === 'Restmüll' && "bg-gray-100 border-gray-400",
-                                                                booking.bin_type === 'Papier' && "bg-blue-50 border-blue-200 text-blue-700",
-                                                                booking.bin_type === 'Bio' && "bg-amber-50 border-amber-200 text-amber-700",
-                                                                booking.bin_type === 'Gelber Sack' && "bg-yellow-50 border-yellow-200 text-yellow-700",
-                                                            )}>
-                                                                {booking.bin_type}
-                                                            </span>
-                                                            {booking.status === 'Erledigt' && <span className="text-xs text-green-600 font-bold border border-green-200 bg-green-50 px-2 py-0.5 rounded-full">Erledigt</span>}
-                                                            {booking.paid && <span className="text-xs text-green-600 font-bold border border-green-200 bg-green-50 px-2 py-0.5 rounded-full">Bezahlt</span>}
-                                                            {booking.is_monthly && <span className="text-xs text-blue-600 font-bold border border-blue-200 bg-blue-50 px-2 py-0.5 rounded-full">ABO</span>}
-                                                            {isGratis && <span className="text-xs text-white font-bold bg-gradient-to-r from-purple-500 to-pink-500 px-2 py-0.5 rounded-full flex items-center gap-1"><Gift className="w-3 h-3" /> GRATIS</span>}
+                                            })
+                                        })() : (
+                                            displayedBookings.map((booking) => {
+                                                const isGratis = freeBookingIds.has(booking.id)
+                                                return (
+                                                    <div key={booking.id} className={cn("flex flex-col md:flex-row items-start md:items-center justify-between p-4 border rounded-lg shadow-sm gap-4 transition-colors", booking.status === 'Erledigt' ? 'bg-muted/40' : 'bg-background')}>
+                                                        <div className="space-y-1">
+                                                            <div className="font-semibold flex items-center gap-2">
+                                                                {booking.customer_name}
+                                                                <span className={cn("text-xs px-2 py-0.5 rounded-full border",
+                                                                    booking.bin_type === 'Restmüll' && "bg-gray-100 border-gray-400",
+                                                                    booking.bin_type === 'Papier' && "bg-blue-50 border-blue-200 text-blue-700",
+                                                                    booking.bin_type === 'Bio' && "bg-amber-50 border-amber-200 text-amber-700",
+                                                                    booking.bin_type === 'Gelber Sack' && "bg-yellow-50 border-yellow-200 text-yellow-700",
+                                                                )}>
+                                                                    {booking.bin_type}
+                                                                </span>
+                                                                {booking.status === 'Erledigt' && <span className="text-xs text-green-600 font-bold border border-green-200 bg-green-50 px-2 py-0.5 rounded-full">Erledigt</span>}
+                                                                {booking.paid && <span className="text-xs text-green-600 font-bold border border-green-200 bg-green-50 px-2 py-0.5 rounded-full">Bezahlt</span>}
+                                                                {booking.is_monthly && <span className="text-xs text-blue-600 font-bold border border-blue-200 bg-blue-50 px-2 py-0.5 rounded-full">ABO</span>}
+                                                                {isGratis && <span className="text-xs text-white font-bold bg-gradient-to-r from-purple-500 to-pink-500 px-2 py-0.5 rounded-full flex items-center gap-1"><Gift className="w-3 h-3" /> GRATIS</span>}
+                                                            </div>
+                                                            <div className="text-sm text-muted-foreground">{booking.customer_address}</div>
                                                         </div>
-                                                        <div className="text-sm text-muted-foreground">{booking.customer_address}</div>
-                                                    </div>
 
-                                                    <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
-                                                        <div className="text-right">
-                                                            <div className="font-medium">{new Date(booking.service_date).toLocaleDateString('de-DE')}</div>
-                                                            <div className={cn("text-xs", isGratis ? "text-purple-600 font-bold" : "text-muted-foreground")}>
-                                                                {booking.service_scope}
-                                                                {isGratis ? " (0,00 €)" : ` (${booking.price.toFixed(2)} €)`}
+                                                        <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
+                                                            <div className="text-right">
+                                                                <div className="font-medium">{new Date(booking.service_date).toLocaleDateString('de-DE')}</div>
+                                                                <div className={cn("text-xs", isGratis ? "text-purple-600 font-bold" : "text-muted-foreground")}>
+                                                                    {booking.service_scope}
+                                                                    {isGratis ? " (0,00 €)" : ` (${booking.price.toFixed(2)} €)`}
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="flex items-center gap-2">
+                                                                <Button
+                                                                    onClick={() => handleTogglePaid(booking.id, booking.paid)}
+                                                                    variant={booking.paid ? "outline" : "destructive"}
+                                                                    size="sm"
+                                                                    className={cn("transition-all",
+                                                                        booking.paid
+                                                                            ? "border-green-500 text-green-600 bg-green-50 border-dashed"
+                                                                            : "bg-red-500 hover:bg-red-600 text-white shadow-sm"
+                                                                    )}
+                                                                    title="Zahlungsstatus ändern"
+                                                                >
+                                                                    <Coins className="w-4 h-4 mr-1" />
+                                                                    {booking.paid ? "Bezahlt" : "Nicht bezahlt"}
+                                                                </Button>
+
+                                                                <Button
+                                                                    onClick={async () => {
+                                                                        if (confirm("Möchtest du diesen Auftrag wirklich löschen?")) {
+                                                                            try {
+                                                                                const { deleteBooking } = await import("@/lib/storage")
+                                                                                await deleteBooking(booking.id)
+                                                                                await checkAuthAndLoad()
+                                                                            } catch (e) {
+                                                                                alert("Fehler beim Löschen: " + e)
+                                                                            }
+                                                                        }
+                                                                    }}
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="text-muted-foreground hover:text-red-500 hover:bg-red-50"
+                                                                    title="Auftrag löschen"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </Button>
+
+                                                                {booking.status === 'Offen' && (
+                                                                    <Button onClick={() => handleMarkAsDone(booking.id)} size="sm" className="bg-green-600 hover:bg-green-700">
+                                                                        <Check className="w-4 h-4 mr-1" /> Fertig
+                                                                    </Button>
+                                                                )}
                                                             </div>
                                                         </div>
-
-                                                        <div className="flex items-center gap-2">
-                                                            <Button
-                                                                onClick={() => handleTogglePaid(booking.id, booking.paid)}
-                                                                variant={booking.paid ? "outline" : "destructive"}
-                                                                size="sm"
-                                                                className={cn("transition-all",
-                                                                    booking.paid
-                                                                        ? "border-green-500 text-green-600 bg-green-50 border-dashed"
-                                                                        : "bg-red-500 hover:bg-red-600 text-white shadow-sm"
-                                                                )}
-                                                                title="Zahlungsstatus ändern"
-                                                            >
-                                                                <Coins className="w-4 h-4 mr-1" />
-                                                                {booking.paid ? "Bezahlt" : "Nicht bezahlt"}
-                                                            </Button>
-
-                                                            <Button
-                                                                onClick={async () => {
-                                                                    if (confirm("Möchtest du diesen Auftrag wirklich löschen?")) {
-                                                                        try {
-                                                                            const { deleteBooking } = await import("@/lib/storage")
-                                                                            await deleteBooking(booking.id)
-                                                                            // Refresh
-                                                                            await checkAuthAndLoad()
-                                                                        } catch (e) {
-                                                                            alert("Fehler beim Löschen: " + e)
-                                                                        }
-                                                                    }
-                                                                }}
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                className="text-muted-foreground hover:text-red-500 hover:bg-red-50"
-                                                                title="Auftrag löschen"
-                                                            >
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </Button>
-
-                                                            {booking.status === 'Offen' && (
-                                                                <Button onClick={() => handleMarkAsDone(booking.id)} size="sm" className="bg-green-600 hover:bg-green-700">
-                                                                    <Check className="w-4 h-4 mr-1" /> Fertig
-                                                                </Button>
-                                                            )}
-                                                        </div>
                                                     </div>
-                                                </div>
-                                            )
-                                        })}
+                                                )
+                                            })
+                                        )}
                                     </div>
                                 )}
                             </CardContent>
