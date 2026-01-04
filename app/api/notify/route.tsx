@@ -15,13 +15,13 @@ export async function POST(request: Request) {
             from: 'Tonnenheld Bot <onboarding@resend.dev>',
             to: ['luan.mezini@gmx.de'], // YOUR REGISTERED EMAIL
             subject: `Neuer Auftrag: ${customerName} (${binType})`,
-            react: EmailTemplate({
-                customerName,
-                customerAddress,
-                binType,
-                serviceDate,
-                serviceScope
-            }),
+            react: <EmailTemplate
+                customerName={customerName}
+                customerAddress={customerAddress}
+                binType={binType}
+                serviceDate={serviceDate}
+                serviceScope={serviceScope}
+            />,
         });
 
         if (error) {
