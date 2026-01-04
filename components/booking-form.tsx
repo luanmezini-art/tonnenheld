@@ -75,12 +75,23 @@ export function BookingForm() {
             let datesToBook = [formData.date]
             if (formData.isMonthly) {
                 // Get next 12 dates to ensure we cover a good period (approx 6-12 months)
-                const upcoming = getNextDates(formData.street, formData.binType, 12)
+                const upcomingDates = getNextDates(formData.street, formData.binType, 12)
+
+                // Convert Date[] to string[] (YYYY-MM-DD) for consistency
+                // Note: toISOString() uses UTC. To be safe with local dates matching the input, 
+                // we should ensure correct formatting. 
+                // However, our getNextDates logic likely works in local time or returns dates with 00:00.
+                // Best simple way: toLocaleDateString('sv') iso-like if supported, or manually.
+                // Or just use the simplistic approach matching the input.
+                const upcomingStrings = upcomingDates.map(d => {
+                    const offset = d.getTimezoneOffset()
+                    const local = new Date(d.getTime() - (offset * 60 * 1000))
+                    return local.toISOString().split('T')[0]
+                })
+
                 // Filter to only include dates AFTER the selected start date (avoiding duplicates if selected is in list)
-                // Actually, if user selects Date X, we want Date X + future.
-                // upcoming contains Date X if it's upcoming.
-                // Let's just merge and deduplicate
-                const allDates = new Set([formData.date, ...upcoming.filter(d => d >= formData.date)])
+                // Comparing string "YYYY-MM-DD" works fine.
+                const allDates = new Set([formData.date, ...upcomingStrings.filter(d => d >= formData.date)])
                 datesToBook = Array.from(allDates).sort()
             }
 
