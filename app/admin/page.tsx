@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { getBookings, updateBookingStatus, updateBookingPaid, type Booking } from "@/lib/storage"
+import { format, addWeeks } from "date-fns"
+import { de } from "date-fns/locale"
+import { getBookings, updateBookingStatus, updateBookingPaid, type Booking, deleteBooking, createBooking } from "@/lib/storage"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Check, LogOut, Trash2, Coins, Euro, Star, Gift } from "lucide-react"
@@ -244,6 +246,68 @@ export default function AdminDashboard() {
                                     <div className="space-y-4">
                                         {displayedBookings.map((booking) => {
                                             const isGratis = freeBookingIds.has(booking.id)
+
+                                            if (filter === 'abos') {
+                                                const normName = booking.customer_name.toLowerCase().trim()
+                                                const normAddr = booking.customer_address.toLowerCase().trim()
+                                                const relevantHistory = completedBookings.filter(b =>
+                                                    b.customer_name.toLowerCase().trim() === normName &&
+                                                    b.customer_address.toLowerCase().trim() === normAddr &&
+                                                    b.bin_type === booking.bin_type
+                                                ).length
+                                                const nextDates = Array.from({ length: 6 }, (_, i) => addWeeks(new Date(booking.service_date), i * 4))
+
+                                                return (
+                                                    <div key={booking.id} className="border rounded-lg p-4 bg-background shadow-sm space-y-4">
+                                                        <div className="flex justify-between items-start">
+                                                            <div>
+                                                                <div className="font-bold text-lg">{booking.customer_name}</div>
+                                                                <div className="text-sm text-muted-foreground">{booking.customer_address}</div>
+                                                            </div>
+                                                            <div className="flex gap-2">
+                                                                <span className={cn("text-xs px-2 py-1 rounded-full border font-medium bg-blue-50 border-blue-200 text-blue-700")}>
+                                                                    {booking.bin_type} Abo
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="bg-muted/30 rounded-md p-3">
+                                                            <div className="text-xs font-semibold uppercase text-muted-foreground mb-2">Vorschau & Stempelkarte</div>
+                                                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+                                                                {nextDates.map((date, index) => {
+                                                                    const cycleNum = ((relevantHistory + index) % 6) + 1
+                                                                    const isFree = cycleNum === 6
+                                                                    const isCurrent = index === 0
+                                                                    return (
+                                                                        <div key={index} className={cn("relative flex flex-col items-center justify-center p-2 rounded border text-center text-sm",
+                                                                            isCurrent ? "bg-white border-primary ring-1 ring-primary shadow-sm" : "bg-muted/50 text-muted-foreground border-transparent",
+                                                                            isFree && !isCurrent && "bg-purple-50 border-purple-200 text-purple-700"
+                                                                        )}>
+                                                                            {isFree && <div className="absolute -top-2 bg-purple-600 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">GRATIS</div>}
+                                                                            <div className="font-medium">{format(date, 'dd.MM.')}</div>
+                                                                            <div className="text-[10px] mt-1 text-muted-foreground">#{cycleNum}</div>
+                                                                            {isCurrent && (
+                                                                                <Button size="sm" variant={isFree ? "default" : "secondary"} className={cn("h-6 text-[10px] mt-2 w-full", isFree && "bg-purple-600 hover:bg-purple-700")}
+                                                                                    onClick={async () => {
+                                                                                        if (!confirm(`Auftrag vom ${format(date, 'dd.MM.')} erledigen und nächsten Monat anlegen?`)) return
+                                                                                        try {
+                                                                                            await updateBookingStatus(booking.id, 'Erledigt')
+                                                                                            const nextDate = addWeeks(new Date(booking.service_date), 4)
+                                                                                            const { id, created_at, status, paid, ...rest } = booking
+                                                                                            await createBooking({ ...rest, service_date: nextDate.toISOString(), paid: false })
+                                                                                            await checkAuthAndLoad()
+                                                                                        } catch (e) { alert("Fehler: " + e) }
+                                                                                    }}
+                                                                                >{isFree ? "Gratis erledigen" : "Erledigen ✓"}</Button>
+                                                                            )}
+                                                                        </div>
+                                                                    )
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            }
+
                                             return (
                                                 <div key={booking.id} className={cn("flex flex-col md:flex-row items-start md:items-center justify-between p-4 border rounded-lg shadow-sm gap-4 transition-colors", booking.status === 'Erledigt' ? 'bg-muted/40' : 'bg-background')}>
                                                     <div className="space-y-1">
