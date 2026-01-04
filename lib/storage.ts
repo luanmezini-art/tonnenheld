@@ -84,6 +84,27 @@ export async function createBooking(booking: Omit<Booking, 'id' | 'created_at' |
     return newBooking
 }
 
+export async function deleteBooking(id: string): Promise<void> {
+    if (supabase) {
+        const { error } = await supabase.from('bookings').delete().eq('id', id)
+        if (error) throw error
+        return
+    }
+
+    // Mock Mode
+    if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('bookings')
+        if (stored) {
+            const bookings: Booking[] = JSON.parse(stored)
+            const updated = bookings.filter(b => b.id !== id)
+            localStorage.setItem('bookings', JSON.stringify(updated))
+        }
+    }
+    // Memory Store (fallback)
+    const index = memoryStore.findIndex(b => b.id === id)
+    if (index !== -1) memoryStore.splice(index, 1)
+}
+
 export async function updateBookingStatus(id: string, status: BookingStatus): Promise<void> {
     if (supabase) {
         const { error } = await supabase.from('bookings').update({ status }).eq('id', id)

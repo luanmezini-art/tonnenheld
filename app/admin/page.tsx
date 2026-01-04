@@ -288,6 +288,27 @@ export default function AdminDashboard() {
                                                                 {booking.paid ? "Bezahlt" : "Nicht bezahlt"}
                                                             </Button>
 
+                                                            <Button
+                                                                onClick={async () => {
+                                                                    if (confirm("Möchtest du diesen Auftrag wirklich löschen?")) {
+                                                                        try {
+                                                                            const { deleteBooking } = await import("@/lib/storage")
+                                                                            await deleteBooking(booking.id)
+                                                                            // Refresh
+                                                                            await checkAuthAndLoad()
+                                                                        } catch (e) {
+                                                                            alert("Fehler beim Löschen: " + e)
+                                                                        }
+                                                                    }
+                                                                }}
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="text-muted-foreground hover:text-red-500 hover:bg-red-50"
+                                                                title="Auftrag löschen"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </Button>
+
                                                             {booking.status === 'Offen' && (
                                                                 <Button onClick={() => handleMarkAsDone(booking.id)} size="sm" className="bg-green-600 hover:bg-green-700">
                                                                     <Check className="w-4 h-4 mr-1" /> Fertig
