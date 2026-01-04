@@ -289,10 +289,16 @@ export function BookingForm() {
                             checked={formData.isMonthly}
                             onChange={(e) => setFormData({ ...formData, isMonthly: e.target.checked })}
                         />
-                        <label htmlFor="monthly" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                            Als dauerhaften <strong>Monatsauftrag</strong> buchen?
-                        </label>
-                        <span className="text-[10px] text-muted-foreground ml-2 bg-muted px-1.5 py-0.5 rounded">Wir kommen dann regelmäßig</span>
+                        <div className="grid gap-1.5 leading-none">
+                            <label htmlFor="monthly" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                Als dauerhaften <strong>Monatsauftrag</strong> buchen?
+                            </label>
+                            {formData.isMonthly && (
+                                <p className="text-[11px] text-amber-600 font-medium">
+                                    Hinweis: Das Abo gilt nur für <b>{formData.binType}</b>. Andere Tonnen müssen separat gebucht werden.
+                                </p>
+                            )}
+                        </div>
                     </div>
 
                 </CardContent>

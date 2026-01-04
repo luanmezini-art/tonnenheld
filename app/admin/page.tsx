@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils"
 export default function AdminDashboard() {
     const [bookings, setBookings] = useState<Booking[]>([])
     const [loading, setLoading] = useState(true)
-    const [filter, setFilter] = useState<'all' | 'open' | 'done'>('open')
+    const [filter, setFilter] = useState<'all' | 'open' | 'done' | 'abos'>('open')
     // --- SELECTION STATE (Moved up to fix Hooks error) ---
     const [selectedCustomerKey, setSelectedCustomerKey] = useState<string | null>(null)
 
@@ -131,6 +131,7 @@ export default function AdminDashboard() {
             if (b.paid && filter !== 'all') return false
             if (filter === 'open') return b.status === 'Offen'
             if (filter === 'done') return b.status === 'Erledigt'
+            if (filter === 'abos') return b.is_monthly === true
             return true
         })
         .sort((a, b) => new Date(a.service_date).getTime() - new Date(b.service_date).getTime())
@@ -222,17 +223,18 @@ export default function AdminDashboard() {
                     <div className="xl:col-span-2 space-y-4">
                         {/* Filters */}
                         <div className="flex gap-2">
-                            <Button variant={filter === 'open' ? 'default' : 'outline'} onClick={() => setFilter('open')}>Offene Aufträge (Unbezahlt)</Button>
-                            <Button variant={filter === 'done' ? 'default' : 'outline'} onClick={() => setFilter('done')}>Erledigt (Unbezahlt)</Button>
-                            <Button variant={filter === 'all' ? 'default' : 'outline'} onClick={() => setFilter('all')}>Alle (Inkl. Bezahlt)</Button>
+                            <Button variant={filter === 'open' ? 'default' : 'outline'} onClick={() => setFilter('open')}>Offene Aufträge</Button>
+                            <Button variant={filter === 'done' ? 'default' : 'outline'} onClick={() => setFilter('done')}>Erledigt</Button>
+                            <Button variant={filter === 'abos' ? 'default' : 'outline'} onClick={() => setFilter('abos')} className={filter === 'abos' ? "bg-blue-600 hover:bg-blue-700" : ""}>Nur Abos</Button>
+                            <Button variant={filter === 'all' ? 'default' : 'outline'} onClick={() => setFilter('all')}>Alle</Button>
                         </div>
 
                         {/* Job List */}
                         <Card>
                             <CardHeader>
-                                <CardTitle>{filter === 'open' ? 'Offene Aufträge' : filter === 'done' ? 'Erledigte Aufträge' : 'Gesamtarchiv'}</CardTitle>
+                                <CardTitle>{filter === 'open' ? 'Offene Aufträge' : filter === 'done' ? 'Erledigte Aufträge' : filter === 'abos' ? 'Aktive Abos' : 'Gesamtarchiv'}</CardTitle>
                                 <CardDescription>
-                                    {filter !== 'all' ? "Zeigt nur unbezahlte Aufträge." : "Zeigt alle Aufträge, auch bezahlte."}
+                                    {filter === 'abos' ? "Zeigt alle Aufträge mit monatlichem Abo." : filter !== 'all' ? "Zeigt nur unbezahlte Aufträge." : "Zeigt alle Aufträge, auch bezahlte."}
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
