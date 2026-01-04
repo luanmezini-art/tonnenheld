@@ -79,6 +79,31 @@ export function BookingForm() {
                 price: price,
                 is_monthly: formData.isMonthly
             })
+
+            // Send Notification (Wait for it to debug)
+            try {
+                const response = await fetch('/api/notify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        customerName: formData.name,
+                        customerAddress: `${formData.street} ${formData.houseNumber}`,
+                        binType: formData.binType,
+                        serviceDate: new Date(formData.date).toLocaleDateString('de-DE'),
+                        serviceScope: formData.serviceScope
+                    })
+                })
+
+                if (!response.ok) {
+                    const errorText = await response.text()
+                    alert(`DEBUG: Email Fehlgeschlagen! Server sagt: ${errorText}`)
+                } else {
+                    // alert("DEBUG: Email erfolgreich an API übergeben!") 
+                }
+            } catch (err: any) {
+                alert(`DEBUG: Email Netzwerk-Fehler: ${err.message}`)
+            }
+
             setSuccess(true)
         } catch (error) {
             console.error("Booking failed:", error)
