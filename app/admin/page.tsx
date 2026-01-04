@@ -128,7 +128,7 @@ export default function AdminDashboard() {
     // Filter Logic: Hide Paid from Main Lists
     const displayedBookings = bookings
         .filter(b => {
-            if (b.paid && filter !== 'all') return false
+            if (b.paid && filter !== 'all' && filter !== 'abos') return false
             if (filter === 'open') return b.status === 'Offen'
             if (filter === 'done') return b.status === 'Erledigt'
             if (filter === 'abos') return b.is_monthly === true
