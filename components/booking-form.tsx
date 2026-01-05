@@ -192,15 +192,28 @@ export function BookingForm() {
                     {formData.isMonthly && successDates.length > 0 ? (
                         <div>
                             <p className="font-semibold mb-2">Deine nächsten Termine:</p>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                    {successDates.slice(0, 9).map((item: any, i) => (
-                                        <div key={i} className="bg-white/60 p-2 rounded border border-green-200 text-sm flex flex-col items-center">
-                                            <div className="font-bold">{new Date(item.date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}.</div>
-                                            <div className="text-[10px] text-muted-foreground uppercase">{item.binType}</div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {successDates.slice(0, 6).map((item: any, i) => (
+                                    <div key={i} className="bg-white/80 p-3 rounded-lg border border-green-100 shadow-sm flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className={cn("w-3 h-10 rounded-full shrink-0",
+                                                item.binType === 'Restmüll' && "bg-gray-800",
+                                                item.binType === 'Papier' && "bg-blue-600",
+                                                item.binType === 'Bio' && "bg-amber-600",
+                                                item.binType === 'Gelber Sack' && "bg-yellow-500",
+                                                item.binType === 'Abo Komplett (Alle Tonnen)' && "bg-green-600" // Fallback/Main
+                                            )} />
+                                            <div>
+                                                <div className="font-bold text-lg text-green-950">
+                                                    {new Date(item.date).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}.
+                                                </div>
+                                                <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                                                    {item.binType.replace(' (Schwarz)', '').replace(' (Blaue)', '').replace(' (Braun)', '')}
+                                                </div>
+                                            </div>
                                         </div>
-                                    ))}
-                                </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     ) : (
