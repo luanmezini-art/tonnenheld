@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils"
 export function BookingForm() {
     const [loading, setLoading] = useState(false)
     const [success, setSuccess] = useState(false)
+    const [successDates, setSuccessDates] = useState<any[]>([])
     const [showWarning, setShowWarning] = useState(true)
     const [formData, setFormData] = useState({
         name: "",
@@ -72,41 +73,58 @@ export function BookingForm() {
             const price = getPrice(formData.serviceScope, formData.isMonthly)
 
             // Determine dates to book
-            let datesToBook = [formData.date]
-            if (formData.isMonthly) {
-                // Get next 12 dates to ensure we cover a good period (approx 6-12 months)
-                const upcomingDates = getNextDates(formData.street, formData.binType, 12)
+            let datesToBook: { date: string, binType: BinType }[] = []
 
-                // Convert Date[] to string[] (YYYY-MM-DD) for consistency
-                // Note: toISOString() uses UTC. To be safe with local dates matching the input, 
-                // we should ensure correct formatting. 
-                // However, our getNextDates logic likely works in local time or returns dates with 00:00.
-                // Best simple way: toLocaleDateString('sv') iso-like if supported, or manually.
-                // Or just use the simplistic approach matching the input.
-                const upcomingStrings = upcomingDates.map(d => {
-                    const offset = d.getTimezoneOffset()
-                    const local = new Date(d.getTime() - (offset * 60 * 1000))
-                    return local.toISOString().split('T')[0]
+            if (formData.isMonthly) {
+                const ALL_BIN_TYPES: BinType[] = ['Restmüll', 'Papier', 'Bio', 'Gelber Sack']
+
+                // For each bin type, get upcoming dates and add them
+                ALL_BIN_TYPES.forEach(type => {
+                    // Get next 12 dates for this bin type
+                    const upcomingDates = getNextDates(formData.street, type, 12)
+
+                    const upcomingStrings = upcomingDates.map(d => {
+                        const offset = d.getTimezoneOffset()
+                        const local = new Date(d.getTime() - (offset * 60 * 1000))
+                        return local.toISOString().split('T')[0]
+                    })
+
+                    // Filter to include dates >= selected start date
+                    // We treat formData.date as the "Start Date" of the subscription
+                    const relevantDates = upcomingStrings.filter(d => d >= formData.date)
+
+                    // Add current selection if it matches the type (just to be safe/consistent)
+                    if (type === formData.binType && !relevantDates.includes(formData.date)) {
+                        relevantDates.push(formData.date)
+                    }
+
+                    relevantDates.forEach(date => {
+                        datesToBook.push({ date, binType: type })
+                    })
                 })
 
-                // Filter to only include dates AFTER the selected start date (avoiding duplicates if selected is in list)
-                // Comparing string "YYYY-MM-DD" works fine.
-                const allDates = new Set([formData.date, ...upcomingStrings.filter(d => d >= formData.date)])
-                datesToBook = Array.from(allDates).sort()
+                // Sort by date then binType
+                datesToBook.sort((a, b) => a.date.localeCompare(b.date))
+
+            } else {
+                datesToBook = [{ date: formData.date, binType: formData.binType }]
             }
 
             // Create bookings in parallel
-            await Promise.all(datesToBook.map(date =>
+            await Promise.all(datesToBook.map(item =>
                 createBooking({
                     customer_name: formData.name,
                     customer_address: `${formData.street} ${formData.houseNumber}`,
-                    service_date: date,
-                    bin_type: formData.binType,
+                    service_date: item.date,
+                    bin_type: item.binType,
                     service_scope: formData.serviceScope,
                     price: price,
                     is_monthly: formData.isMonthly
                 })
             ))
+
+            // Set success dates for preview (next 6)
+            setSuccessDates(datesToBook.slice(0, 6))
 
             // Send Notification (Fire and forget)
             fetch('/api/notify', {
@@ -115,7 +133,7 @@ export function BookingForm() {
                 body: JSON.stringify({
                     customerName: formData.name,
                     customerAddress: `${formData.street} ${formData.houseNumber}`,
-                    binType: formData.binType,
+                    binType: formData.isMonthly ? "Abo Komplett (Alle Tonnen)" : formData.binType,
                     serviceDate: new Date(formData.date).toLocaleDateString('de-DE'),
                     serviceScope: formData.serviceScope
                 })
@@ -165,13 +183,27 @@ export function BookingForm() {
                         <CheckCircle2 className="w-10 h-10 text-green-600" />
                     </div>
                     <CardTitle className="text-green-800">Buchung Erfolgreich!</CardTitle>
-                    <CardDescription className="text-green-700">
-                        Danke! Ich kümmere mich darum.
-                    </CardDescription>
                 </CardHeader>
-                <CardContent className="text-center text-green-800">
-                    <p className="mb-2">Abholtermin: <strong>{new Date(formData.date).toLocaleDateString('de-DE')}</strong></p>
-                    <p className="text-sm">Bezahlung erfolgt bar (Einwurf) oder nach Absprache.</p>
+                <CardContent className="text-center text-green-800 space-y-4">
+                    {formData.isMonthly && successDates.length > 0 ? (
+                        <div>
+                            <p className="font-semibold mb-2">Deine nächsten Termine:</p>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                    {successDates.slice(0, 9).map((item: any, i) => (
+                                        <div key={i} className="bg-white/60 p-2 rounded border border-green-200 text-sm flex flex-col items-center">
+                                            <div className="font-bold">{new Date(item.date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}.</div>
+                                            <div className="text-[10px] text-muted-foreground uppercase">{item.binType}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <p className="mb-2">Abholtermin: <strong>{new Date(formData.date).toLocaleDateString('de-DE')}</strong></p>
+                    )}
+
+                    <p className="text-sm border-t border-green-200 pt-3 mt-3">Bezahlung erfolgt bar (Einwurf) oder nach Absprache.</p>
                 </CardContent>
                 <CardFooter className="justify-center">
                     <Button variant="outline" onClick={() => setSuccess(false)} className="bg-white border-green-200 hover:bg-green-100 text-green-700">
@@ -235,19 +267,26 @@ export function BookingForm() {
                     <div className="space-y-4 pt-2">
                         <div className="space-y-2">
                             <label htmlFor="binType" className="text-sm font-medium">Welche Tonne?</label>
-                            <select
-                                id="binType"
-                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                value={formData.binType}
-                                onChange={(e) => {
-                                    setFormData({ ...formData, binType: e.target.value as BinType, date: "" })
-                                }}
-                            >
-                                <option value="Restmüll">Restmüll (Schwarz)</option>
-                                <option value="Papier">Papier (Blaue)</option>
-                                <option value="Bio">Bio (Braun)</option>
-                                <option value="Gelber Sack">Gelber Sack</option>
-                            </select>
+                            {formData.isMonthly ? (
+                                <div className="p-3 border rounded-md bg-green-50 text-green-800 text-sm font-medium flex items-center gap-2">
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    Alle Tonnenarten inklusive
+                                </div>
+                            ) : (
+                                <select
+                                    id="binType"
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                    value={formData.binType}
+                                    onChange={(e) => {
+                                        setFormData({ ...formData, binType: e.target.value as BinType, date: "" })
+                                    }}
+                                >
+                                    <option value="Restmüll">Restmüll (Schwarz)</option>
+                                    <option value="Papier">Papier (Blaue)</option>
+                                    <option value="Bio">Bio (Braun)</option>
+                                    <option value="Gelber Sack">Gelber Sack</option>
+                                </select>
+                            )}
                         </div>
 
                         <select
