@@ -362,7 +362,6 @@ export function BookingForm() {
                             </label>
                             {formData.isMonthly && (
                                 <p className="text-[11px] text-amber-600 font-medium">
-                                    Hinweis: Das Abo gilt nur für <b>{formData.binType}</b>. Andere Tonnen müssen separat gebucht werden.<br />
                                     Zum Kündigen/Beenden bitte einfach Bescheid sagen.
                                 </p>
                             )}
