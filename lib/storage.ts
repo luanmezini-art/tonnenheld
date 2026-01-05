@@ -105,6 +105,36 @@ export async function deleteBooking(id: string): Promise<void> {
     if (index !== -1) memoryStore.splice(index, 1)
 }
 
+export async function deleteSubscription(customerName: string, customerAddress: string): Promise<void> {
+    if (supabase) {
+        // Delete all monthly bookings for this customer
+        const { error } = await supabase
+            .from('bookings')
+            .delete()
+            .eq('customer_name', customerName)
+            .eq('customer_address', customerAddress)
+            .eq('is_monthly', true)
+
+        if (error) throw error
+        return
+    }
+
+    // Mock Mode
+    if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('bookings')
+        if (stored) {
+            const bookings: Booking[] = JSON.parse(stored)
+            // Filter out monthly bookings for this customer
+            const updated = bookings.filter(b =>
+                !(b.customer_name === customerName &&
+                    b.customer_address === customerAddress &&
+                    b.is_monthly)
+            )
+            localStorage.setItem('bookings', JSON.stringify(updated))
+        }
+    }
+}
+
 export async function updateBookingStatus(id: string, status: BookingStatus): Promise<void> {
     if (supabase) {
         const { error } = await supabase.from('bookings').update({ status }).eq('id', id)

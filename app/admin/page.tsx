@@ -315,21 +315,41 @@ export default function AdminDashboard() {
                                                 }
 
                                                 return (
-                                                    <div key={groupKey} className="border rounded-lg p-4 bg-background shadow-sm space-y-4">
+                                                    <div key={groupKey} className="border rounded-lg p-4 bg-background shadow-sm space-y-4 relative">
                                                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                                                             <div>
                                                                 <div className="font-bold text-lg">{customerName}</div>
                                                                 <div className="text-sm text-muted-foreground">{customerAddress}</div>
                                                             </div>
-                                                            <div className="flex flex-wrap gap-2 justify-end">
-                                                                {uniqueBinTypes.map(type => (
-                                                                    <span key={type} className={cn("text-xs px-2 py-1 rounded-full border font-medium", getBinColor(type))}>
-                                                                        {type}
+                                                            <div className="flex flex-col items-end gap-2">
+                                                                <div className="flex flex-wrap gap-2 justify-end">
+                                                                    {uniqueBinTypes.map(type => (
+                                                                        <span key={type} className={cn("text-xs px-2 py-1 rounded-full border font-medium", getBinColor(type))}>
+                                                                            {type}
+                                                                        </span>
+                                                                    ))}
+                                                                    <span className="text-xs px-2 py-1 rounded-full border font-medium bg-green-50 border-green-200 text-green-700">
+                                                                        Abo Aktiv
                                                                     </span>
-                                                                ))}
-                                                                <span className="text-xs px-2 py-1 rounded-full border font-medium bg-green-50 border-green-200 text-green-700">
-                                                                    Abo Aktiv
-                                                                </span>
+                                                                </div>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    className="h-6 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-1"
+                                                                    onClick={async () => {
+                                                                        if (confirm(`Möchtest du das Abo von ${customerName} wirklich beenden? Alle offenen Abo-Termine werden gelöscht.`)) {
+                                                                            try {
+                                                                                const { deleteSubscription } = await import("@/lib/storage")
+                                                                                await deleteSubscription(customerName, customerAddress)
+                                                                                await checkAuthAndLoad()
+                                                                            } catch (e) {
+                                                                                alert("Fehler beim Löschen: " + e)
+                                                                            }
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <LogOut className="w-3 h-3 rotate-180" /> Abo beenden & löschen
+                                                                </Button>
                                                             </div>
                                                         </div>
 
