@@ -246,98 +246,130 @@ export default function AdminDashboard() {
                                 ) : (
                                     <div className="space-y-4">
                                         {filter === 'abos' ? (() => {
-                                            // 1. Group by unique subscription (Name + Address + Type)
+                                            // 1. Group by unique household (Name + Address)
                                             const groups = new Map<string, Booking[]>()
                                             displayedBookings.forEach(b => {
-                                                // Aggressive normalization: Strip all spaces, lowercase
-                                                const normName = b.customer_name.toLowerCase().replace(/\s+/g, '')
-                                                const normAddr = b.customer_address.toLowerCase().replace(/\s+/g, '')
-                                                const normType = b.bin_type.toLowerCase()
-                                                const key = `${normName}|${normAddr}|${normType}`
+                                                const normName = b.customer_name.toLowerCase().trim()
+                                                const normAddr = b.customer_address.toLowerCase().trim()
+                                                const key = `${normName}|${normAddr}` // Combined Key
 
                                                 if (!groups.has(key)) groups.set(key, [])
                                                 groups.get(key)!.push(b)
                                             })
 
                                             return Array.from(groups.entries()).map(([groupKey, group]) => {
-                                                // Pick the best representative
+                                                // Representative data from first booking (Name/Address are same)
+                                                // Sort group by date
                                                 group.sort((a, b) => new Date(a.service_date).getTime() - new Date(b.service_date).getTime())
 
-                                                const activeBooking = group.find(b => b.status === 'Offen')
-                                                const latestBooking = group[group.length - 1]
-                                                const booking = activeBooking || latestBooking
+                                                const representative = group[0]
+                                                const customerName = representative.customer_name
+                                                const customerAddress = representative.customer_address
 
-                                                const normName = booking.customer_name.toLowerCase().trim()
-                                                const normAddr = booking.customer_address.toLowerCase().trim()
+                                                // Find all unique bin types in this subscription bundle
+                                                // We look at all bookings in the group to find the types
+                                                // (Since we filtered for is_monthly=true, these are all active sub parts)
+                                                const uniqueBinTypes = Array.from(new Set(group.map(b => b.bin_type)))
 
-                                                const relevantHistory = completedBookings.filter(b =>
-                                                    b.customer_name.toLowerCase().trim() === normName &&
-                                                    b.customer_address.toLowerCase().trim() === normAddr &&
-                                                    b.bin_type === booking.bin_type
-                                                ).length
+                                                // Calculate Mixed Schedule
+                                                const street = customerAddress.split(/\d/)[0].trim()
+                                                let mixedSchedule: { date: Date, binType: string, realBookingId?: string, isFree?: boolean }[] = []
 
-                                                // EXTRACT STREET
-                                                const street = booking.customer_address.split(/\d/)[0].trim()
-                                                const realSchedule = getNextDates(street, booking.bin_type, 10)
+                                                // 1. Get theoretical future dates for EACH bin type
+                                                uniqueBinTypes.forEach(type => {
+                                                    // Get next few dates
+                                                    const dates = getNextDates(street, type as any, 6)
 
-                                                let displayDates = realSchedule.slice(0, 6)
-                                                if (displayDates.length === 0) {
-                                                    displayDates = Array.from({ length: 6 }, (_, i) => addWeeks(new Date(booking.service_date), i * 4))
-                                                } else {
-                                                    const currentServiceDate = new Date(booking.service_date).setHours(0, 0, 0, 0)
-                                                    const firstScheduleDate = displayDates[0].setHours(0, 0, 0, 0)
+                                                    dates.forEach(d => {
+                                                        // Check if we have a REAL open booking for this date/type
+                                                        const match = group.find(b =>
+                                                            b.bin_type === type &&
+                                                            b.status === 'Offen' &&
+                                                            new Date(b.service_date).toDateString() === d.toDateString()
+                                                        )
 
-                                                    if (firstScheduleDate > currentServiceDate) {
-                                                        displayDates = [new Date(booking.service_date), ...displayDates].slice(0, 6)
-                                                    }
-                                                    if (booking.status === 'Offen') {
-                                                        displayDates[0] = new Date(booking.service_date)
-                                                    }
+                                                        mixedSchedule.push({
+                                                            date: d,
+                                                            binType: type,
+                                                            realBookingId: match?.id,
+                                                            // Logic for free status could be complex here, simplifying for now 
+                                                            // (or we'd need to re-run the modulo logic per bin type stream)
+                                                            isFree: false
+                                                        })
+                                                    })
+                                                })
+
+                                                // 2. Sort mixed schedule by date
+                                                mixedSchedule.sort((a, b) => a.date.getTime() - b.date.getTime())
+
+                                                // 3. Take top 6
+                                                const displaySchedule = mixedSchedule.slice(0, 6)
+
+                                                // Helper to get color for bin type
+                                                const getBinColor = (type: string) => {
+                                                    if (type === 'Restmüll') return "bg-gray-100 border-gray-400 text-gray-900"
+                                                    if (type === 'Papier') return "bg-blue-50 border-blue-200 text-blue-700"
+                                                    if (type === 'Bio') return "bg-amber-50 border-amber-200 text-amber-700"
+                                                    if (type === 'Gelber Sack') return "bg-yellow-50 border-yellow-200 text-yellow-700"
+                                                    return "bg-gray-100"
                                                 }
 
                                                 return (
                                                     <div key={groupKey} className="border rounded-lg p-4 bg-background shadow-sm space-y-4">
-                                                        <div className="flex justify-between items-start">
+                                                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                                                             <div>
-                                                                <div className="font-bold text-lg">{booking.customer_name}</div>
-                                                                <div className="text-sm text-muted-foreground">{booking.customer_address}</div>
+                                                                <div className="font-bold text-lg">{customerName}</div>
+                                                                <div className="text-sm text-muted-foreground">{customerAddress}</div>
                                                             </div>
-                                                            <div className="flex gap-2">
-                                                                <span className={cn("text-xs px-2 py-1 rounded-full border font-medium",
-                                                                    booking.bin_type === 'Restmüll' && "bg-gray-100 border-gray-400",
-                                                                    booking.bin_type === 'Papier' && "bg-blue-50 border-blue-200 text-blue-700",
-                                                                    booking.bin_type === 'Bio' && "bg-amber-50 border-amber-200 text-amber-700",
-                                                                    booking.bin_type === 'Gelber Sack' && "bg-yellow-50 border-yellow-200 text-yellow-700",
-                                                                )}>
-                                                                    {booking.bin_type} Abo
+                                                            <div className="flex flex-wrap gap-2 justify-end">
+                                                                {uniqueBinTypes.map(type => (
+                                                                    <span key={type} className={cn("text-xs px-2 py-1 rounded-full border font-medium", getBinColor(type))}>
+                                                                        {type}
+                                                                    </span>
+                                                                ))}
+                                                                <span className="text-xs px-2 py-1 rounded-full border font-medium bg-green-50 border-green-200 text-green-700">
+                                                                    Abo Aktiv
                                                                 </span>
                                                             </div>
                                                         </div>
+
                                                         <div className="bg-muted/30 rounded-md p-3">
-                                                            <div className="text-xs font-semibold uppercase text-muted-foreground mb-2">Vorschau & Stempelkarte (Echter Kalender)</div>
+                                                            <div className="text-xs font-semibold uppercase text-muted-foreground mb-2">Nächste Abholungen (Alle Tonnen)</div>
                                                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-                                                                {displayDates.map((date, index) => {
-                                                                    const cycleNum = ((relevantHistory + index) % 6) + 1
-                                                                    const isFree = cycleNum === 6
-                                                                    const isCurrent = index === 0
+                                                                {displaySchedule.map((item, index) => {
+                                                                    const isReady = !!item.realBookingId // We have a real task waiting
+
                                                                     return (
-                                                                        <div key={index} className={cn("relative flex flex-col items-center justify-center p-2 rounded border text-center text-sm",
-                                                                            isCurrent ? "bg-white border-primary ring-1 ring-primary shadow-sm" : "bg-muted/50 text-muted-foreground border-transparent",
-                                                                            isFree && !isCurrent && "bg-purple-50 border-purple-200 text-purple-700"
+                                                                        <div key={index} className={cn("relative flex flex-col items-center justify-center p-2 rounded border text-center text-sm transition-all",
+                                                                            // Use bin color for the whole card border/bg hint? Or just a badge? 
+                                                                            // Let's use a subtle version of the bin color for the card bg
+                                                                            item.binType === 'Restmüll' && "bg-gray-50/50 border-gray-200",
+                                                                            item.binType === 'Papier' && "bg-blue-50/30 border-blue-100",
+                                                                            item.binType === 'Bio' && "bg-amber-50/30 border-amber-100",
+                                                                            item.binType === 'Gelber Sack' && "bg-yellow-50/30 border-yellow-100",
+                                                                            isReady && "ring-1 ring-offset-1 ring-primary/20 shadow-sm"
                                                                         )}>
-                                                                            {isFree && <div className="absolute -top-2 bg-purple-600 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">GRATIS</div>}
-                                                                            <div className="font-medium">{format(new Date(date), 'dd.MM.')}</div>
-                                                                            <div className="text-[10px] mt-1 text-muted-foreground">#{cycleNum}</div>
-                                                                            {isCurrent && (
-                                                                                <Button size="sm" variant={isFree ? "default" : "secondary"} className={cn("h-6 text-[10px] mt-2 w-full", isFree && "bg-purple-600 hover:bg-purple-700")}
+                                                                            <div className="font-bold text-base">{format(item.date, 'dd.MM.')}</div>
+                                                                            <div className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium mt-1 mb-1", getBinColor(item.binType))}>
+                                                                                {item.binType}
+                                                                            </div>
+
+                                                                            {isReady ? (
+                                                                                <Button size="sm" variant="default" className="h-6 text-[10px] w-full bg-green-600 hover:bg-green-700 mt-1"
                                                                                     onClick={async () => {
-                                                                                        // Just mark as done. The grouping logic will automatically show the next open booking.
+                                                                                        if (!item.realBookingId) return
                                                                                         try {
-                                                                                            await updateBookingStatus(booking.id, 'Erledigt')
+                                                                                            await updateBookingStatus(item.realBookingId, 'Erledigt')
                                                                                             await checkAuthAndLoad()
                                                                                         } catch (e) { alert("Fehler: " + e) }
                                                                                     }}
-                                                                                >{isFree ? "Gratis!" : <Check className="w-4 h-4" />}</Button>
+                                                                                >
+                                                                                    <Check className="w-3 h-3 mr-1" /> Erledigen
+                                                                                </Button>
+                                                                            ) : (
+                                                                                <div className="h-6 flex items-center justify-center text-[10px] text-muted-foreground italic mt-1">
+                                                                                    Geplant
+                                                                                </div>
                                                                             )}
                                                                         </div>
                                                                     )
