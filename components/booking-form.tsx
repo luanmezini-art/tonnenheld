@@ -26,7 +26,7 @@ export function BookingForm() {
 
     // Simple validation state
     // We check if date is selected (which comes from valid list now)
-    const isFormValid = formData.name && formData.houseNumber && formData.date
+    const isFormValid = formData.name && formData.houseNumber && (formData.isMonthly || formData.date)
 
     const [validationError, setValidationError] = useState(false)
 
@@ -91,10 +91,14 @@ export function BookingForm() {
 
                     // Filter to include dates >= selected start date
                     // We treat formData.date as the "Start Date" of the subscription
-                    const relevantDates = upcomingStrings.filter(d => d >= formData.date)
+                    // If monthly, start from TODAY (since date selector represents "Nächster Termin", which we implicitly find)
+                    const filterDate = formData.isMonthly ? new Date().toISOString().split('T')[0] : formData.date
+                    const relevantDates = upcomingStrings.filter(d => d >= filterDate)
 
                     // Add current selection if it matches the type (just to be safe/consistent)
-                    if (type === formData.binType && !relevantDates.includes(formData.date)) {
+                    // Only relevant if NOT monthly, or if we want to ensure "today" is included? 
+                    // Logic: upcomingStrings should cover it.
+                    if (!formData.isMonthly && type === formData.binType && !relevantDates.includes(formData.date)) {
                         relevantDates.push(formData.date)
                     }
 
@@ -200,7 +204,7 @@ export function BookingForm() {
                             </div>
                         </div>
                     ) : (
-                        <p className="mb-2">Abholtermin: <strong>{new Date(formData.date).toLocaleDateString('de-DE')}</strong></p>
+                        <p className="mb-2">Abholtermin: <strong>{new Date(formData.date || new Date()).toLocaleDateString('de-DE')}</strong></p>
                     )}
 
                     <p className="text-sm border-t border-green-200 pt-3 mt-3">Bezahlung erfolgt bar (Einwurf) oder nach Absprache.</p>
@@ -289,20 +293,27 @@ export function BookingForm() {
                             )}
                         </div>
 
-                        <select
-                            id="date"
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                            value={formData.date}
-                            onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                            required
-                        >
-                            <option value="" disabled>Bitte Termin wählen</option>
-                            {validDates.map((date) => (
-                                <option key={date.toISOString()} value={date.toISOString().split('T')[0]}>
-                                    {date.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
-                                </option>
-                            ))}
-                        </select>
+                        {formData.isMonthly ? (
+                            <div className="p-3 border rounded-md bg-green-50 text-green-800 text-sm font-medium flex items-center gap-2">
+                                <CalendarIcon className="w-4 h-4" />
+                                Nächster Termin & Folgende (Abo)
+                            </div>
+                        ) : (
+                            <select
+                                id="date"
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                value={formData.date}
+                                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                                required
+                            >
+                                <option value="" disabled>Bitte Termin wählen</option>
+                                {validDates.map((date) => (
+                                    <option key={date.toISOString()} value={date.toISOString().split('T')[0]}>
+                                        {date.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
                         <p className="text-xs text-muted-foreground">Wir zeigen dir nur die nächsten 5 gültigen Termine.</p>
                         <p className="text-[10px] text-muted-foreground mt-1 italic">Termine ab Oktober 2026 werden im Spätsommer ergänzt.</p>
                     </div>
